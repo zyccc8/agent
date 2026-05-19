@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -102,8 +104,25 @@ class AppHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", 8000), AppHandler)
-    print("Agent competitor analysis app running at http://127.0.0.1:8000")
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", "8000"))
+    try:
+        server = ThreadingHTTPServer((host, port), AppHandler)
+    except PermissionError as exc:
+        print(
+            f"Cannot bind to http://{host}:{port}: {exc}. "
+            "Try running from your normal Terminal, or set another port, for example: PORT=8080 python3 app.py",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    except OSError as exc:
+        print(
+            f"Cannot start server at http://{host}:{port}: {exc}. "
+            "If the port is busy, try: PORT=8080 python3 app.py",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    print(f"Agent competitor analysis app running at http://{host}:{port}")
     server.serve_forever()
 
 
