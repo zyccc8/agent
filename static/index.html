@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>竞品分析 Agent 协作系统</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Agent 智能体</p>
+        <h1>AI 驱动的竞品分析 Agent 协作系统</h1>
+      </div>
+      <button id="demoButton" type="button">运行示例</button>
+    </header>
+
+    <main class="layout">
+      <section class="panel input-panel">
+        <h2>分析输入</h2>
+        <label>
+          行业场景
+          <input id="industryInput" value="AI 笔记工具" />
+        </label>
+        <label>
+          竞品列表
+          <textarea id="competitorsInput">Notion AI, Mem, Reflect, Evernote AI</textarea>
+        </label>
+        <label class="check-row">
+          <input id="liveSourcesInput" type="checkbox" />
+          启用真实网页搜索、抓取和正文抽取
+        </label>
+        <button id="analyzeButton" type="button">开始分析</button>
+        <p id="statusText" class="status">等待运行</p>
+      </section>
+
+      <section class="panel">
+        <h2>Agent DAG</h2>
+        <div id="dag" class="dag"></div>
+      </section>
+
+      <section class="panel wide">
+        <div class="section-header">
+          <h2>竞品画像</h2>
+          <span id="qualityBadge" class="badge">未运行</span>
+        </div>
+        <div id="profiles" class="profiles"></div>
+      </section>
+
+      <section class="panel wide">
+        <h2>分析报告</h2>
+        <pre id="report" class="report">运行后将在这里显示 Markdown 报告。</pre>
+      </section>
+
+      <section class="panel">
+        <h2>证据链</h2>
+        <div id="evidence" class="evidence"></div>
+      </section>
+
+      <section class="panel">
+        <h2>运行日志</h2>
+        <div id="traces" class="traces"></div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

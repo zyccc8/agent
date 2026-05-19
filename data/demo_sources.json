@@ -1,0 +1,68 @@
+{
+  "sources": [
+    {
+      "competitor": "Notion AI",
+      "source_type": "website",
+      "title": "Notion AI product page",
+      "url": "https://www.notion.so/product/ai",
+      "excerpt": "Notion AI is positioned inside a connected workspace where teams write, summarize, search, and manage wiki knowledge across projects.",
+      "confidence": 0.92
+    },
+    {
+      "competitor": "Notion AI",
+      "source_type": "pricing",
+      "title": "Notion pricing page",
+      "url": "https://www.notion.so/pricing",
+      "excerpt": "Notion offers free and paid plans, with AI features commonly sold as an add-on or included in higher paid workspace plans.",
+      "confidence": 0.88
+    },
+    {
+      "competitor": "Mem",
+      "source_type": "website",
+      "title": "Mem product page",
+      "url": "https://get.mem.ai/",
+      "excerpt": "Mem focuses on personal knowledge capture, AI search, and automatic organization for individuals who want fast recall.",
+      "confidence": 0.85
+    },
+    {
+      "competitor": "Mem",
+      "source_type": "blog",
+      "title": "Mem AI notes positioning",
+      "url": "https://get.mem.ai/blog",
+      "excerpt": "The product emphasizes AI-powered search and resurfacing information from notes without requiring heavy manual folders.",
+      "confidence": 0.78
+    },
+    {
+      "competitor": "Reflect",
+      "source_type": "website",
+      "title": "Reflect notes product page",
+      "url": "https://reflect.app/",
+      "excerpt": "Reflect is a networked note-taking app with backlinks, daily notes, personal knowledge graphs, AI writing, and fast capture.",
+      "confidence": 0.84
+    },
+    {
+      "competitor": "Reflect",
+      "source_type": "pricing",
+      "title": "Reflect pricing",
+      "url": "https://reflect.app/pricing",
+      "excerpt": "Reflect uses a subscription model and targets individual knowledge workers who value privacy and connected notes.",
+      "confidence": 0.8
+    },
+    {
+      "competitor": "Evernote AI",
+      "source_type": "website",
+      "title": "Evernote AI features",
+      "url": "https://evernote.com/",
+      "excerpt": "Evernote has a large legacy notes user base and adds AI search, cleanup, and note organization features across devices.",
+      "confidence": 0.82
+    },
+    {
+      "competitor": "Evernote AI",
+      "source_type": "review",
+      "title": "Evernote market perception",
+      "url": "https://evernote.com/blog",
+      "excerpt": "Evernote competes in a crowded note-taking market where users compare AI search, capture speed, syncing, and pricing.",
+      "confidence": 0.72
+    }
+  ]
+}
