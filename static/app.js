@@ -1,6 +1,7 @@
 const industryInput = document.querySelector("#industryInput");
 const competitorsInput = document.querySelector("#competitorsInput");
 const liveSourcesInput = document.querySelector("#liveSourcesInput");
+const llmInput = document.querySelector("#llmInput");
 const analyzeButton = document.querySelector("#analyzeButton");
 const demoButton = document.querySelector("#demoButton");
 const statusText = document.querySelector("#statusText");
@@ -29,6 +30,7 @@ async function analyze(useDemo = false) {
               .map((item) => item.trim())
               .filter(Boolean),
             use_live_sources: liveSourcesInput.checked,
+            use_llm: llmInput.checked,
           }),
         });
 

@@ -5,6 +5,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
+from .llm_client import CustomLLMClient, LLMError
 from .models import AgentTrace, CompetitorProfile, Evidence
 from .web_research import WebResearchClient, infer_source_type, page_to_excerpt
 
@@ -132,7 +133,58 @@ class CleaningAgent:
 class AnalysisAgent:
     name = "分析 Agent"
 
-    def run(self, industry: str, competitors: List[str], evidence: List[Evidence]) -> Tuple[List[CompetitorProfile], Dict[str, List[str]], AgentTrace]:
+    def __init__(self, llm_client: CustomLLMClient | None = None) -> None:
+        self.llm_client = llm_client or CustomLLMClient()
+
+    def run(
+        self,
+        industry: str,
+        competitors: List[str],
+        evidence: List[Evidence],
+        use_llm: bool = False,
+    ) -> Tuple[List[CompetitorProfile], Dict[str, List[str]], AgentTrace]:
+        if use_llm and self.llm_client.available:
+            try:
+                return self._run_with_llm(industry, competitors, evidence)
+            except LLMError as exc:
+                profiles, comparison = self._run_with_rules(industry, competitors, evidence)
+                trace = AgentTrace(
+                    agent=self.name,
+                    status="completed",
+                    input_summary=f"输入 {len(evidence)} 条清洗证据；大模型增强失败后降级",
+                    output_summary=f"LLM 调用失败，已使用规则兜底生成 {len(profiles)} 个竞品画像。",
+                    artifacts={
+                        "profile_count": len(profiles),
+                        "comparison": comparison,
+                        "llm_enabled": True,
+                        "llm_used": False,
+                        "llm_error": str(exc),
+                    },
+                )
+                return profiles, comparison, trace
+
+        profiles, comparison = self._run_with_rules(industry, competitors, evidence)
+        trace = AgentTrace(
+            agent=self.name,
+            status="completed",
+            input_summary=f"输入 {len(evidence)} 条清洗证据；模式：规则分析",
+            output_summary=f"生成 {len(profiles)} 个竞品画像和 {sum(len(v) for v in comparison.values())} 条比较洞察。",
+            artifacts={
+                "profile_count": len(profiles),
+                "comparison": comparison,
+                "llm_enabled": use_llm,
+                "llm_used": False,
+                "llm_error": "" if not use_llm else "LLM_API_URL 未配置",
+            },
+        )
+        return profiles, comparison, trace
+
+    def _run_with_rules(
+        self,
+        industry: str,
+        competitors: List[str],
+        evidence: List[Evidence],
+    ) -> Tuple[List[CompetitorProfile], Dict[str, List[str]]]:
         grouped: Dict[str, List[Evidence]] = defaultdict(list)
         for item in evidence:
             grouped[item.competitor].append(item)
@@ -140,7 +192,7 @@ class AnalysisAgent:
         profiles: List[CompetitorProfile] = []
         for competitor in competitors:
             items = grouped.get(competitor, [])
-            text = " ".join(item.excerpt for item in items).lower()
+            text = f"{competitor} " + " ".join(item.excerpt for item in items).lower()
             profiles.append(
                 CompetitorProfile(
                     name=competitor,
@@ -160,12 +212,69 @@ class AnalysisAgent:
             "opportunities": opportunity_points(profiles),
             "risks": shared_risks(profiles),
         }
+        return profiles, comparison
+
+    def _run_with_llm(
+        self,
+        industry: str,
+        competitors: List[str],
+        evidence: List[Evidence],
+    ) -> Tuple[List[CompetitorProfile], Dict[str, List[str]], AgentTrace]:
+        payload = {
+            "industry": industry,
+            "competitors": competitors,
+            "evidence": [
+                {
+                    "id": item.id,
+                    "competitor": item.competitor,
+                    "source_type": item.source_type,
+                    "title": item.title,
+                    "url": item.url,
+                    "excerpt": item.excerpt,
+                    "confidence": item.confidence,
+                }
+                for item in evidence
+            ],
+        }
+        instructions = (
+            "你是资深产品战略分析师。你要基于用户给出的行业、竞品名称和证据，"
+            "生成可追溯的竞品分析结构化 JSON。不要把所有产品硬套成同一类；"
+            "如果竞品名称显示是硬件、SaaS、App 或模型产品，要结合真实品类判断。"
+            "不要编造不存在的证据 ID。输出必须是 JSON object，不要 Markdown。"
+        )
+        prompt = (
+            "请返回如下 JSON 结构：\n"
+            "{\n"
+            "  \"profiles\": [\n"
+            "    {\"name\":\"\", \"company\":\"\", \"positioning\":\"\", \"target_users\":[\"\"], "
+            "\"core_features\":[\"\"], \"pricing\":\"\", \"differentiators\":[\"\"], "
+            "\"risks\":[\"\"], \"evidence_ids\":[\"\"]}\n"
+            "  ],\n"
+            "  \"comparison\": {\"common_patterns\":[\"\"], \"opportunities\":[\"\"], \"risks\":[\"\"]}\n"
+            "}\n\n"
+            "要求：\n"
+            "1. profiles 必须覆盖所有 competitors。\n"
+            "2. 每个画像最多 4 个核心功能、3 个差异化、3 个风险。\n"
+            "3. positioning 要具体，不能写成泛泛的知识管理工具，除非证据确实如此。\n"
+            "4. 对证据不足的内容要写“公开信息不足/需要补充来源”，不要装作确定。\n"
+            "5. evidence_ids 只能使用输入 evidence 中对应竞品的 id。\n\n"
+            f"输入数据：\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
+        )
+        result = self.llm_client.complete_json(instructions, prompt)
+        profiles = profiles_from_llm_result(result, competitors, evidence, industry)
+        comparison = comparison_from_llm_result(result, profiles)
         trace = AgentTrace(
             agent=self.name,
             status="completed",
-            input_summary=f"输入 {len(evidence)} 条清洗证据",
-            output_summary=f"生成 {len(profiles)} 个竞品画像和 {sum(len(v) for v in comparison.values())} 条比较洞察。",
-            artifacts={"profile_count": len(profiles), "comparison": comparison},
+            input_summary=f"输入 {len(evidence)} 条清洗证据；模式：大模型增强",
+            output_summary=f"LLM 生成 {len(profiles)} 个竞品画像和 {sum(len(v) for v in comparison.values())} 条比较洞察。",
+            artifacts={
+                "profile_count": len(profiles),
+                "comparison": comparison,
+                "llm_enabled": True,
+                "llm_used": True,
+                "model": self.llm_client.model,
+            },
         )
         return profiles, comparison, trace
 
@@ -173,8 +282,48 @@ class AnalysisAgent:
 class ReportAgent:
     name = "报告撰写 Agent"
 
-    def run(self, industry: str, profiles: List[CompetitorProfile], comparison: Dict[str, List[str]], evidence: List[Evidence]) -> Tuple[str, AgentTrace]:
-        evidence_map = {item.id: item for item in evidence}
+    def __init__(self, llm_client: CustomLLMClient | None = None) -> None:
+        self.llm_client = llm_client or CustomLLMClient()
+
+    def run(
+        self,
+        industry: str,
+        profiles: List[CompetitorProfile],
+        comparison: Dict[str, List[str]],
+        evidence: List[Evidence],
+        use_llm: bool = False,
+    ) -> Tuple[str, AgentTrace]:
+        if use_llm and self.llm_client.available:
+            try:
+                return self._run_with_llm(industry, profiles, comparison, evidence)
+            except LLMError as exc:
+                report = self._render_rule_report(industry, profiles, comparison, evidence)
+                trace = AgentTrace(
+                    agent=self.name,
+                    status="completed",
+                    input_summary=f"输入 {len(profiles)} 个画像和 {len(evidence)} 条证据；大模型增强失败后降级",
+                    output_summary=f"LLM 报告生成失败，已使用模板报告，约 {len(report)} 个字符。",
+                    artifacts={"report_chars": len(report), "llm_enabled": True, "llm_used": False, "llm_error": str(exc)},
+                )
+                return report, trace
+
+        report = self._render_rule_report(industry, profiles, comparison, evidence)
+        trace = AgentTrace(
+            agent=self.name,
+            status="completed",
+            input_summary=f"输入 {len(profiles)} 个画像和 {len(evidence)} 条证据；模式：模板报告",
+            output_summary=f"生成 Markdown 报告，约 {len(report)} 个字符。",
+            artifacts={"report_chars": len(report), "llm_enabled": use_llm, "llm_used": False},
+        )
+        return report, trace
+
+    def _render_rule_report(
+        self,
+        industry: str,
+        profiles: List[CompetitorProfile],
+        comparison: Dict[str, List[str]],
+        evidence: List[Evidence],
+    ) -> str:
         lines = [
             f"# {industry}竞品分析报告",
             "",
@@ -217,13 +366,45 @@ class ReportAgent:
             lines.append(f"- [{item.id}] {item.competitor}｜{item.source_type}｜{item.title}｜{source}｜置信度 {item.confidence:.2f}")
             lines.append(f"  - 摘录：{item.excerpt}")
 
-        report = "\n".join(lines)
+        return "\n".join(lines)
+
+    def _run_with_llm(
+        self,
+        industry: str,
+        profiles: List[CompetitorProfile],
+        comparison: Dict[str, List[str]],
+        evidence: List[Evidence],
+    ) -> Tuple[str, AgentTrace]:
+        payload = {
+            "industry": industry,
+            "profiles": [profile.__dict__ for profile in profiles],
+            "comparison": comparison,
+            "evidence": [item.__dict__ for item in evidence],
+        }
+        instructions = (
+            "你是资深咨询顾问，擅长写清晰、可信、可溯源的中文竞品分析报告。"
+            "报告必须使用 Markdown，关键判断要引用证据 ID，例如 [live-apple-1]。"
+            "不要输出空泛套话，不要把不同品类产品混为一谈。"
+        )
+        prompt = (
+            "请基于以下结构化分析生成一份商业竞品分析报告。结构必须包括："
+            "执行摘要、竞品逐项分析、横向对比、机会点、风险与待验证假设、证据索引。\n"
+            "要求每个竞品至少有一个具体判断；证据不足时明确写出待补充来源。\n\n"
+            f"输入数据：\n{json.dumps(payload, ensure_ascii=False, indent=2)}"
+        )
+        result = self.llm_client.complete_json(
+            instructions + " 输出 JSON object，字段为 {\"report\":\"Markdown 文本\"}。",
+            prompt,
+        )
+        report = str(result.get("report") or "").strip()
+        if not report:
+            raise LLMError("Model report JSON did not include report")
         trace = AgentTrace(
             agent=self.name,
             status="completed",
-            input_summary=f"输入 {len(profiles)} 个画像和 {len(evidence)} 条证据",
-            output_summary=f"生成 Markdown 报告，约 {len(report)} 个字符。",
-            artifacts={"report_chars": len(report)},
+            input_summary=f"输入 {len(profiles)} 个画像和 {len(evidence)} 条证据；模式：大模型报告",
+            output_summary=f"LLM 生成 Markdown 报告，约 {len(report)} 个字符。",
+            artifacts={"report_chars": len(report), "llm_enabled": True, "llm_used": True, "model": self.llm_client.model},
         )
         return report, trace
 
@@ -296,8 +477,84 @@ def infer_company(name: str) -> str:
     return company_map.get(name, name)
 
 
+def profiles_from_llm_result(
+    result: Dict[str, object],
+    competitors: List[str],
+    evidence: List[Evidence],
+    industry: str,
+) -> List[CompetitorProfile]:
+    raw_profiles = result.get("profiles")
+    evidence_by_competitor = defaultdict(set)
+    for item in evidence:
+        evidence_by_competitor[item.competitor].add(item.id)
+    raw_by_name = {}
+    if isinstance(raw_profiles, list):
+        for item in raw_profiles:
+            if isinstance(item, dict) and item.get("name"):
+                raw_by_name[str(item["name"]).lower()] = item
+
+    profiles = []
+    for competitor in competitors:
+        item = raw_by_name.get(competitor.lower(), {})
+        allowed_evidence = evidence_by_competitor.get(competitor, set())
+        evidence_ids = [
+            str(value)
+            for value in as_list(item.get("evidence_ids"))
+            if str(value) in allowed_evidence
+        ]
+        if not evidence_ids:
+            evidence_ids = [ev.id for ev in evidence if ev.competitor == competitor]
+        profiles.append(
+            CompetitorProfile(
+                name=str(item.get("name") or competitor),
+                company=str(item.get("company") or infer_company(competitor)),
+                positioning=str(item.get("positioning") or infer_positioning(industry, "")),
+                target_users=non_empty_list(item.get("target_users"), ["目标用户待验证"]),
+                core_features=non_empty_list(item.get("core_features"), ["核心功能待验证"]),
+                pricing=str(item.get("pricing") or "公开信息不足，需要补充定价页"),
+                differentiators=non_empty_list(item.get("differentiators"), ["差异化待验证"]),
+                risks=non_empty_list(item.get("risks"), ["需要补充公开来源验证"]),
+                evidence_ids=evidence_ids,
+            )
+        )
+    return profiles
+
+
+def comparison_from_llm_result(
+    result: Dict[str, object],
+    profiles: List[CompetitorProfile],
+) -> Dict[str, List[str]]:
+    raw = result.get("comparison")
+    if isinstance(raw, dict):
+        return {
+            "common_patterns": non_empty_list(raw.get("common_patterns"), common_patterns(profiles)),
+            "opportunities": non_empty_list(raw.get("opportunities"), opportunity_points(profiles)),
+            "risks": non_empty_list(raw.get("risks"), shared_risks(profiles)),
+        }
+    return {
+        "common_patterns": common_patterns(profiles),
+        "opportunities": opportunity_points(profiles),
+        "risks": shared_risks(profiles),
+    }
+
+
+def as_list(value: object) -> List[object]:
+    return value if isinstance(value, list) else []
+
+
+def non_empty_list(value: object, fallback: List[str]) -> List[str]:
+    items = [str(item).strip() for item in as_list(value) if str(item).strip()]
+    return items or fallback
+
+
 def infer_positioning(industry: str, text: str) -> str:
     category = industry if industry.endswith(("产品", "工具", "平台", "系统", "服务")) else f"{industry}产品"
+    if is_laptop_context(industry, text):
+        if any(keyword in text for keyword in ["拯救者", "legion", "y7000", "游戏"]):
+            return f"面向游戏玩家和高性能需求用户的 {category}"
+        if any(keyword in text for keyword in ["macbook", "air", "轻薄"]):
+            return f"面向移动办公、学习和创作场景的轻薄型 {category}"
+        return f"面向办公、学习和生产力场景的 {category}"
     if "workspace" in text or "wiki" in text:
         return f"面向团队知识库和协作文档的 {category}"
     if "networked" in text or "backlinks" in text:
@@ -309,6 +566,12 @@ def infer_positioning(industry: str, text: str) -> str:
 
 def infer_target_users(text: str) -> List[str]:
     users = []
+    if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
+        if any(keyword in text for keyword in ["拯救者", "legion", "游戏"]):
+            return ["游戏玩家", "工程/设计类学生", "高性能移动办公用户"]
+        if "macbook" in text:
+            return ["学生", "移动办公用户", "内容创作者"]
+        return ["学生", "办公用户", "家庭用户"]
     if "team" in text or "workspace" in text:
         users.append("产品/运营/研发团队")
     if "personal" in text or "individual" in text:
@@ -321,6 +584,13 @@ def infer_target_users(text: str) -> List[str]:
 
 
 def infer_features(text: str) -> List[str]:
+    if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
+        features = []
+        if any(keyword in text for keyword in ["macbook", "air", "轻薄"]):
+            features.extend(["轻薄便携", "长续航", "生态协同"])
+        if any(keyword in text for keyword in ["拯救者", "legion", "y7000", "游戏"]):
+            features.extend(["高性能处理器", "独立显卡", "高刷新率屏幕"])
+        return features or ["移动办公", "学习娱乐", "多任务处理"]
     candidates = [
         ("search", "智能搜索"),
         ("summary", "内容总结"),
@@ -340,6 +610,8 @@ def infer_features(text: str) -> List[str]:
 
 
 def infer_pricing(text: str) -> str:
+    if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
+        return "公开价格需以电商/官网实时信息为准"
     if "free" in text and "paid" in text:
         return "免费层 + 付费高级功能"
     if "free" in text and ("plans" in text or "pricing" in text):
@@ -355,6 +627,12 @@ def infer_pricing(text: str) -> str:
 
 def infer_differentiators(text: str) -> List[str]:
     points = []
+    if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
+        if "macbook" in text:
+            return ["轻薄续航和系统生态优势明显", "适合长期移动办公和创作"]
+        if any(keyword in text for keyword in ["拯救者", "legion", "y7000", "游戏"]):
+            return ["性能释放和游戏场景更突出", "更适合需要独显的重负载任务"]
+        return ["品牌渠道和售后覆盖较强"]
     if "workspace" in text:
         points.append("与团队工作流结合紧密")
     if "networked" in text or "backlinks" in text:
@@ -370,6 +648,8 @@ def infer_risks(items: Iterable[Evidence], text: str) -> List[str]:
     risks = []
     if any(item.source_type == "missing" for item in items):
         risks.append("公开来源不足，结论置信度较低")
+    if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
+        risks.append("价格、配置和发布时间强依赖实时来源，需要补充官网或电商证据")
     if "privacy" in text:
         risks.append("需要处理隐私和数据安全顾虑")
     if "crowded" in text:
@@ -377,6 +657,14 @@ def infer_risks(items: Iterable[Evidence], text: str) -> List[str]:
     if not risks:
         risks.append("需要持续验证用户留存和付费转化")
     return risks
+
+
+def is_laptop_context(industry: str, text: str) -> bool:
+    haystack = f"{industry} {text}".lower()
+    return any(
+        keyword in haystack
+        for keyword in ["笔记本", "电脑", "macbook", "laptop", "notebook", "lenovo", "联想", "拯救者"]
+    )
 
 
 def common_patterns(profiles: List[CompetitorProfile]) -> List[str]:

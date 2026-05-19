@@ -91,7 +91,13 @@ class AppHandler(BaseHTTPRequestHandler):
             return
 
         use_live_sources = bool(payload.get("use_live_sources"))
-        result = run_pipeline(industry, competitors[:5], use_live_sources=use_live_sources)
+        use_llm = bool(payload.get("use_llm"))
+        result = run_pipeline(
+            industry,
+            competitors[:5],
+            use_live_sources=use_live_sources,
+            use_llm=use_llm,
+        )
         RUNS_DIR.mkdir(exist_ok=True)
         (RUNS_DIR / f"{result['run_id']}.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2),

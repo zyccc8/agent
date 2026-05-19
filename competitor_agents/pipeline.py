@@ -21,7 +21,12 @@ WORKFLOW_DAG = [
 ]
 
 
-def run_pipeline(industry: str, competitors: List[str], use_live_sources: bool = False) -> dict:
+def run_pipeline(
+    industry: str,
+    competitors: List[str],
+    use_live_sources: bool = False,
+    use_llm: bool = False,
+) -> dict:
     run_id = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:6]}"
     traces = []
 
@@ -31,10 +36,21 @@ def run_pipeline(industry: str, competitors: List[str], use_live_sources: bool =
     cleaned_evidence, trace = CleaningAgent().run(evidence)
     traces.append(trace)
 
-    profiles, comparison, trace = AnalysisAgent().run(industry, competitors, cleaned_evidence)
+    profiles, comparison, trace = AnalysisAgent().run(
+        industry,
+        competitors,
+        cleaned_evidence,
+        use_llm=use_llm,
+    )
     traces.append(trace)
 
-    report, trace = ReportAgent().run(industry, profiles, comparison, cleaned_evidence)
+    report, trace = ReportAgent().run(
+        industry,
+        profiles,
+        comparison,
+        cleaned_evidence,
+        use_llm=use_llm,
+    )
     traces.append(trace)
 
     quality, trace = QAAgent().run(profiles, cleaned_evidence, report)
@@ -46,6 +62,7 @@ def run_pipeline(industry: str, competitors: List[str], use_live_sources: bool =
         "industry": industry,
         "competitors": competitors,
         "use_live_sources": use_live_sources,
+        "use_llm": use_llm,
         "workflow_dag": WORKFLOW_DAG,
         "evidence": to_dict(cleaned_evidence),
         "profiles": to_dict(profiles),

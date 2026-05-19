@@ -10,6 +10,7 @@
 - 查看质检 Agent 给出的缺失来源、低置信度和风险提示。
 - 查看完整运行日志，说明系统不是一次性生成文本，而是多 Agent 协作完成。
 - 可选启用真实网页搜索、网页抓取和正文抽取；网络失败时会降级到演示数据。
+- 可选接入你自己的大模型 API，让画像和报告由 LLM 基于证据生成。
 
 ## 快速开始
 
@@ -26,6 +27,28 @@ http://127.0.0.1:8000
 默认示例场景是“AI 笔记工具”，竞品为 Notion AI、Mem、Reflect、Evernote AI。
 
 如果要尝试实时网页采集，在页面中勾选“启用真实网页搜索、抓取和正文抽取”。该模式使用 Python 标准库请求 DuckDuckGo HTML 搜索页并抽取候选网页正文，不需要额外安装依赖。
+
+如果要启用大模型增强，配置你自己的 OpenAI-compatible API。支持 Chat Completions 和 Responses 两种格式：
+
+```bash
+export LLM_API_URL="https://你的服务地址/v1/chat/completions"
+export LLM_API_KEY="你的 key，如果本地服务不需要鉴权可不填"
+export LLM_MODEL="你的模型名"
+export LLM_API_FORMAT="chat"
+python3 app.py
+```
+
+如果你的服务是 Responses 风格接口：
+
+```bash
+export LLM_API_URL="https://你的服务地址/v1/responses"
+export LLM_API_FORMAT="responses"
+python3 app.py
+```
+
+如果 URL 包含 `chat/completions`，系统会自动按 `chat` 格式调用；否则默认按 `responses` 格式调用。
+
+也可以参考 `.env.example`。如果你的模型服务不需要鉴权，`LLM_API_KEY` 可以留空；如果你的服务要求其他鉴权方式，需要在 `competitor_agents/llm_client.py` 里调整请求头。
 
 ## 项目结构
 
@@ -45,7 +68,8 @@ http://127.0.0.1:8000
 - 实时采集增强：可从搜索结果中抓取公开网页并抽取正文，无法访问时自动降级。
 - 清洗 Agent：去重、规范化字段、按竞品知识 Schema 整理证据。
 - 分析 Agent：比较功能、定位、价格、目标用户、风险和差异化。
-- 报告撰写 Agent：生成结构化 Markdown 报告。
+- 分析 Agent：有 API Key 时调用大模型生成结构化画像，否则使用规则兜底。
+- 报告撰写 Agent：有 API Key 时调用大模型生成 Markdown 报告，否则使用模板兜底。
 - 质检/溯源 Agent：检查关键结论是否有证据、是否存在缺失或低置信度。
 
 ## 适合面试讲解的亮点
