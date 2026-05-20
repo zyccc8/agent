@@ -1,0 +1,6 @@
+{
+  "LLM_API_URL": "https://api.deepseek.com/chat/completions",
+  "LLM_API_KEY": "这里填写你的 DeepSeek API Key",
+  "LLM_MODEL": "deepseek-v4-pro",
+  "LLM_API_FORMAT": "chat"
+}

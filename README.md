@@ -50,6 +50,14 @@ python3 app.py
 
 也可以参考 `.env.example`。如果你的模型服务不需要鉴权，`LLM_API_KEY` 可以留空；如果你的服务要求其他鉴权方式，需要在 `competitor_agents/llm_client.py` 里调整请求头。
 
+如果你不想每次在终端里 `export`，可以复制本地配置文件：
+
+```bash
+cp config.local.example.json config.local.json
+```
+
+然后编辑 `config.local.json`，填入你自己的 API 地址、Key 和模型名。`config.local.json` 已加入 `.gitignore`，不会上传到 GitHub。
+
 ## 项目结构
 
 ```text

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Dict, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from .config import get_config_value
 
 
 class LLMError(RuntimeError):
@@ -27,10 +28,10 @@ class CustomLLMClient:
         api_format: Optional[str] = None,
         timeout: int = 45,
     ) -> None:
-        self.api_url = api_url or os.environ.get("LLM_API_URL", "")
-        self.api_key = api_key or os.environ.get("LLM_API_KEY", "")
-        self.model = model or os.environ.get("LLM_MODEL", "")
-        self.api_format = (api_format or os.environ.get("LLM_API_FORMAT", "") or self._infer_format()).lower()
+        self.api_url = api_url or get_config_value("LLM_API_URL")
+        self.api_key = api_key or get_config_value("LLM_API_KEY")
+        self.model = model or get_config_value("LLM_MODEL")
+        self.api_format = (api_format or get_config_value("LLM_API_FORMAT") or self._infer_format()).lower()
         self.timeout = timeout
 
     @property
