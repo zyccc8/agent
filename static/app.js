@@ -11,6 +11,7 @@ const reportEl = document.querySelector("#report");
 const evidenceEl = document.querySelector("#evidence");
 const tracesEl = document.querySelector("#traces");
 const qualityBadge = document.querySelector("#qualityBadge");
+const llmNotice = document.querySelector("#llmNotice");
 
 async function analyze(useDemo = false) {
   statusText.textContent = "Agent 正在协作分析...";
@@ -77,6 +78,8 @@ function renderResult(result) {
     )
     .join("");
 
+  renderLlmNotice(result);
+
   reportEl.textContent = result.report;
 
   evidenceEl.innerHTML = result.evidence
@@ -104,6 +107,32 @@ function renderResult(result) {
       `,
     )
     .join("");
+}
+
+function renderLlmNotice(result) {
+  const analysisTrace = result.traces.find((trace) => trace.agent === "分析 Agent");
+  const reportTrace = result.traces.find((trace) => trace.agent === "报告撰写 Agent");
+  const analysisArtifacts = analysisTrace?.artifacts || {};
+  const reportArtifacts = reportTrace?.artifacts || {};
+  const llmUsed = Boolean(analysisArtifacts.llm_used || reportArtifacts.llm_used);
+  const llmEnabled = Boolean(analysisArtifacts.llm_enabled || reportArtifacts.llm_enabled || result.use_llm);
+  const errors = [analysisArtifacts.llm_error, reportArtifacts.llm_error].filter(Boolean);
+
+  if (llmUsed) {
+    const model = analysisArtifacts.model || reportArtifacts.model || "已配置模型";
+    llmNotice.className = "llm-notice ok";
+    llmNotice.textContent = `大模型已生效：${model}`;
+    return;
+  }
+
+  if (llmEnabled) {
+    llmNotice.className = "llm-notice warn";
+    llmNotice.textContent = `大模型未生效，当前使用规则兜底。原因：${errors.join("；") || "未配置 LLM_API_URL"}`;
+    return;
+  }
+
+  llmNotice.className = "llm-notice";
+  llmNotice.textContent = "当前使用规则分析，未启用大模型。";
 }
 
 analyzeButton.addEventListener("click", () => analyze(false));

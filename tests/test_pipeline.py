@@ -22,6 +22,29 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(result["quality"]["status"], "needs_review")
         self.assertTrue(result["quality"]["issues"])
 
+    def test_footwear_fallback_does_not_use_knowledge_management_copy(self):
+        result = run_pipeline(
+            "运动鞋",
+            ["萨洛蒙XT-QUEST", "new balance 1906a", "nike vomero5", "Adidas samba"],
+            use_llm=True,
+        )
+        joined = "\n".join(
+            [
+                profile["positioning"]
+                + " "
+                + " ".join(profile["target_users"])
+                + " "
+                + " ".join(profile["core_features"])
+                for profile in result["profiles"]
+            ]
+        )
+
+        self.assertIn("户外", joined)
+        self.assertIn("缓震", joined)
+        self.assertIn("复古", joined)
+        self.assertNotIn("知识管理", joined)
+        self.assertNotIn("笔记管理", joined)
+
 
 if __name__ == "__main__":
     unittest.main()

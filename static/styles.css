@@ -197,6 +197,29 @@ textarea {
   line-height: 1.55;
 }
 
+.llm-notice {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--muted);
+  background: #fbfcff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.llm-notice.ok {
+  border-color: #9bd8bd;
+  color: var(--green);
+  background: #f1fbf6;
+}
+
+.llm-notice.warn {
+  border-color: #e7c27c;
+  color: var(--amber);
+  background: #fff8eb;
+}
+
 .report {
   max-height: 520px;
   overflow: auto;

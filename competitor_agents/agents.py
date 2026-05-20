@@ -208,8 +208,8 @@ class AnalysisAgent:
             )
 
         comparison = {
-            "common_patterns": common_patterns(profiles),
-            "opportunities": opportunity_points(profiles),
+            "common_patterns": common_patterns(profiles, industry),
+            "opportunities": opportunity_points(profiles, industry),
             "risks": shared_risks(profiles),
         }
         return profiles, comparison
@@ -527,13 +527,13 @@ def comparison_from_llm_result(
     raw = result.get("comparison")
     if isinstance(raw, dict):
         return {
-            "common_patterns": non_empty_list(raw.get("common_patterns"), common_patterns(profiles)),
-            "opportunities": non_empty_list(raw.get("opportunities"), opportunity_points(profiles)),
+            "common_patterns": non_empty_list(raw.get("common_patterns"), common_patterns(profiles, "")),
+            "opportunities": non_empty_list(raw.get("opportunities"), opportunity_points(profiles, "")),
             "risks": non_empty_list(raw.get("risks"), shared_risks(profiles)),
         }
     return {
-        "common_patterns": common_patterns(profiles),
-        "opportunities": opportunity_points(profiles),
+        "common_patterns": common_patterns(profiles, ""),
+        "opportunities": opportunity_points(profiles, ""),
         "risks": shared_risks(profiles),
     }
 
@@ -549,6 +549,16 @@ def non_empty_list(value: object, fallback: List[str]) -> List[str]:
 
 def infer_positioning(industry: str, text: str) -> str:
     category = industry if industry.endswith(("产品", "工具", "平台", "系统", "服务")) else f"{industry}产品"
+    if is_footwear_context(industry, text):
+        if any(keyword in text for keyword in ["samba", "阿迪达斯", "adidas"]):
+            return f"面向复古潮流、日常穿搭和轻运动场景的 {category}"
+        if any(keyword in text for keyword in ["vomero", "nike", "耐克"]):
+            return f"面向缓震跑步、通勤和舒适穿着场景的 {category}"
+        if any(keyword in text for keyword in ["new balance", "1906", "nb"]):
+            return f"面向复古跑鞋、潮流穿搭和日常通勤场景的 {category}"
+        if any(keyword in text for keyword in ["xt-quest", "salomon", "萨洛蒙"]):
+            return f"面向户外徒步、越野风格和机能穿搭场景的 {category}"
+        return f"面向运动、通勤和日常穿搭场景的 {category}"
     if is_laptop_context(industry, text):
         if any(keyword in text for keyword in ["拯救者", "legion", "y7000", "游戏"]):
             return f"面向游戏玩家和高性能需求用户的 {category}"
@@ -566,6 +576,16 @@ def infer_positioning(industry: str, text: str) -> str:
 
 def infer_target_users(text: str) -> List[str]:
     users = []
+    if is_footwear_context("", text):
+        if any(keyword in text for keyword in ["salomon", "萨洛蒙", "xt-quest"]):
+            return ["户外运动爱好者", "机能风穿搭用户", "轻徒步用户"]
+        if any(keyword in text for keyword in ["vomero", "跑"]):
+            return ["跑步用户", "重视脚感的通勤用户", "运动休闲用户"]
+        if any(keyword in text for keyword in ["samba", "adidas", "阿迪达斯"]):
+            return ["潮流穿搭用户", "复古球鞋用户", "日常通勤用户"]
+        if any(keyword in text for keyword in ["new balance", "1906", "nb"]):
+            return ["复古跑鞋用户", "潮流穿搭用户", "舒适通勤用户"]
+        return ["运动休闲用户", "日常通勤用户", "潮流穿搭用户"]
     if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
         if any(keyword in text for keyword in ["拯救者", "legion", "游戏"]):
             return ["游戏玩家", "工程/设计类学生", "高性能移动办公用户"]
@@ -584,6 +604,17 @@ def infer_target_users(text: str) -> List[str]:
 
 
 def infer_features(text: str) -> List[str]:
+    if is_footwear_context("", text):
+        features = []
+        if any(keyword in text for keyword in ["salomon", "萨洛蒙", "xt-quest"]):
+            features.extend(["户外抓地", "稳定支撑", "机能外观"])
+        if any(keyword in text for keyword in ["vomero", "nike", "耐克"]):
+            features.extend(["缓震脚感", "跑步支撑", "日常舒适"])
+        if any(keyword in text for keyword in ["samba", "adidas", "阿迪达斯"]):
+            features.extend(["复古低帮", "经典外观", "易于搭配"])
+        if any(keyword in text for keyword in ["new balance", "1906", "nb"]):
+            features.extend(["复古跑鞋设计", "舒适缓震", "通勤穿搭"])
+        return features or ["穿着舒适", "运动支撑", "日常搭配"]
     if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
         features = []
         if any(keyword in text for keyword in ["macbook", "air", "轻薄"]):
@@ -610,6 +641,8 @@ def infer_features(text: str) -> List[str]:
 
 
 def infer_pricing(text: str) -> str:
+    if is_footwear_context("", text):
+        return "公开价格需以品牌官网、电商平台和发售渠道实时信息为准"
     if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
         return "公开价格需以电商/官网实时信息为准"
     if "free" in text and "paid" in text:
@@ -627,6 +660,16 @@ def infer_pricing(text: str) -> str:
 
 def infer_differentiators(text: str) -> List[str]:
     points = []
+    if is_footwear_context("", text):
+        if any(keyword in text for keyword in ["salomon", "萨洛蒙", "xt-quest"]):
+            return ["户外机能属性突出", "越野风格辨识度强"]
+        if any(keyword in text for keyword in ["vomero", "nike", "耐克"]):
+            return ["缓震舒适度更突出", "兼顾跑步与日常穿着"]
+        if any(keyword in text for keyword in ["samba", "adidas", "阿迪达斯"]):
+            return ["经典复古造型认知强", "穿搭场景覆盖广"]
+        if any(keyword in text for keyword in ["new balance", "1906", "nb"]):
+            return ["复古跑鞋风格成熟", "舒适通勤和潮流属性兼具"]
+        return ["运动与日常穿搭兼容性较强"]
     if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
         if "macbook" in text:
             return ["轻薄续航和系统生态优势明显", "适合长期移动办公和创作"]
@@ -648,6 +691,11 @@ def infer_risks(items: Iterable[Evidence], text: str) -> List[str]:
     risks = []
     if any(item.source_type == "missing" for item in items):
         risks.append("公开来源不足，结论置信度较低")
+    if is_footwear_context("", text):
+        risks.append("价格、配色、库存和发售渠道变化快，需要补充官网或电商实时来源")
+        if any(keyword in text for keyword in ["samba", "adidas", "阿迪达斯"]):
+            risks.append("热门款可能存在溢价、断码和同质化穿搭风险")
+        return risks
     if any(keyword in text for keyword in ["macbook", "联想", "lenovo", "拯救者", "laptop", "notebook", "笔记本"]):
         risks.append("价格、配置和发布时间强依赖实时来源，需要补充官网或电商证据")
     if "privacy" in text:
@@ -667,7 +715,46 @@ def is_laptop_context(industry: str, text: str) -> bool:
     )
 
 
-def common_patterns(profiles: List[CompetitorProfile]) -> List[str]:
+def is_footwear_context(industry: str, text: str) -> bool:
+    haystack = f"{industry} {text}".lower()
+    return any(
+        keyword in haystack
+        for keyword in [
+            "运动鞋",
+            "鞋",
+            "球鞋",
+            "跑鞋",
+            "sneaker",
+            "salomon",
+            "萨洛蒙",
+            "xt-quest",
+            "new balance",
+            "1906",
+            "nike",
+            "耐克",
+            "vomero",
+            "adidas",
+            "阿迪达斯",
+            "samba",
+        ]
+    )
+
+
+def common_patterns(profiles: List[CompetitorProfile], industry: str = "") -> List[str]:
+    combined = f"{industry} " + " ".join(
+        " ".join(profile.core_features + profile.target_users + [profile.positioning])
+        for profile in profiles
+    )
+    if is_footwear_context(industry, combined):
+        return [
+            "主要竞品都在运动功能与日常穿搭之间寻找平衡。",
+            "舒适脚感、外观辨识度和渠道价格是用户比较时的关键因素。",
+        ]
+    if is_laptop_context(industry, combined):
+        return [
+            "主要竞品围绕性能、便携、续航和生态体验形成差异。",
+            "配置、价格和发布节奏需要结合实时渠道信息判断。",
+        ]
     feature_counter = Counter(feature for profile in profiles for feature in profile.core_features)
     common = [feature for feature, count in feature_counter.items() if count >= 2]
     if common:
@@ -675,7 +762,20 @@ def common_patterns(profiles: List[CompetitorProfile]) -> List[str]:
     return ["AI 能力主要围绕写作、总结、搜索和知识组织展开。"]
 
 
-def opportunity_points(profiles: List[CompetitorProfile]) -> List[str]:
+def opportunity_points(profiles: List[CompetitorProfile], industry: str = "") -> List[str]:
+    combined = f"{industry} " + " ".join(profile.positioning for profile in profiles)
+    if is_footwear_context(industry, combined):
+        return [
+            "补充官网、电商价格、库存和用户评价后，可进一步比较性价比与购买风险。",
+            "按使用场景拆分跑步、通勤、潮流穿搭和户外机能，更容易形成清晰推荐。",
+            "把配色、尺码、渠道溢价纳入分析，会比单纯功能对比更贴近购买决策。",
+        ]
+    if is_laptop_context(industry, combined):
+        return [
+            "补充实时配置、价格和评测数据后，可进一步比较性能释放与性价比。",
+            "按学生、游戏、办公、创作等人群拆分，会让推荐结论更可执行。",
+            "把售后、系统生态和扩展性纳入分析，可提升购买建议质量。",
+        ]
     return [
         "用可追溯证据链降低 AI 结论不可信的问题。",
         "将竞品分析流程产品化，而不只是生成一次性文本。",
